@@ -6,9 +6,7 @@ import hashlib
 import jwt
 
 # Configuration
-CLIENT_ID = "92d27895-4258-4107-988e-bc4c145287b0"
-CLIENT_SECRET = "IEg8Q~EL5z5Hj5QwkDYzTKg_4lXBRQ3XHNZ8~c3D"
-TENANT_ID = "f6b91b78-6a0c-4ecc-b65b-bec670ca2076"
+
 REDIRECT_URI = "https://localhost:9090/azure"
 SCOPES = ["https://graph.microsoft.com/.default", "Files.Read"]
 
