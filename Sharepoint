@@ -1,0 +1,175 @@
+import requests
+import json
+import pkce
+import base64
+import hashlib
+import jwt
+
+# Configuration
+CLIENT_ID = "92d27895-4258-4107-988e-bc4c145287b0"
+CLIENT_SECRET = "IEg8Q~EL5z5Hj5QwkDYzTKg_4lXBRQ3XHNZ8~c3D"
+TENANT_ID = "f6b91b78-6a0c-4ecc-b65b-bec670ca2076"
+REDIRECT_URI = "https://localhost:9090/azure"
+SCOPES = ["https://graph.microsoft.com/.default", "Files.Read"]
+
+AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
+GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
+
+# Step 1: Authenticate User
+def authenticate_user():
+    # Generate a code verifier and code challenge
+    code_verifier = pkce.generate_code_verifier(length=128)
+    code_challenge = pkce.get_code_challenge(code_verifier)
+
+    print("Open the following URL in your browser to log in:")
+    auth_url = (
+        f"{AUTHORITY}/oauth2/v2.0/authorize?"
+        f"client_id={CLIENT_ID}&response_type=code&redirect_uri={REDIRECT_URI}&"
+        f"scope={' '.join(SCOPES)}&code_challenge={code_challenge}&code_challenge_method=S256"
+    )
+    print(auth_url)
+
+    auth_code = input("Enter the authorization code: ")
+
+    # Exchange the authorization code for an access token
+    token_url = f"{AUTHORITY}/oauth2/v2.0/token"
+    data = {
+        "client_id": CLIENT_ID,
+        "grant_type": "authorization_code",
+        "code": auth_code,
+        "redirect_uri": REDIRECT_URI,
+        "code_verifier": code_verifier,
+    }
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    response = requests.post(token_url, data=data, headers=headers)
+    if response.status_code == 200:
+        tokens = response.json()
+        print("Access Token:", tokens["access_token"])
+       # print("Refresh Token:", tokens["refresh_token"])
+        return tokens["access_token"]
+    else:
+        print("Error:", response.json())
+        return None
+    
+# Step 2: Fetch SharePoint Sites
+def fetch_sites(access_token):
+    url = f"{GRAPH_API_BASE}/sites"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        print("SharePoint Sites:", response.content)
+        response_json = response.json()
+        print("Response JSON:", json.dumps(response_json, indent=2))  # Print the entire response JSON
+        return response_json.get("value", [])
+    else:
+        raise Exception(f"Failed to fetch sites: {response.text}")
+
+# Step 3: Fetch User's Files
+def fetch_user_files(access_token):
+    url = f"{GRAPH_API_BASE}/me/drive/root/children"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        response_json = response.json()
+        print("Response JSON:", json.dumps(response_json, indent=2))  # Print the entire response JSON
+        return response_json.get("value", [])
+    else:
+        raise Exception(f"Failed to fetch files: {response.text}")
+
+# Step 3: Fetch Document Libraries
+def fetch_libraries(access_token, site_id):
+    url = f"{GRAPH_API_BASE}/sites/{site_id}/drives"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.json().get("value", [])
+    else:
+        raise Exception(f"Failed to fetch document libraries: {response.text}")
+
+# Step 4: Fetch Folder Contents
+def fetch_folder_contents(access_token, drive_id, folder_id):
+    url = f"{GRAPH_API_BASE}/drives/{drive_id}/items/{folder_id}/children"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.json().get("value", [])
+    else:
+        raise Exception(f"Failed to fetch folder contents: {response.text}")
+
+# Step 5: Download Files
+def download_file(access_token, file_url, save_path):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(file_url, headers=headers, stream=True)
+    if response.status_code == 200:
+        with open(save_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=1024):
+                f.write(chunk)
+        print(f"File downloaded: {save_path}")
+    else:
+        raise Exception(f"Failed to download file: {response.text}")
+
+# Main Functionality
+def main():
+    try:
+       
+       
+        # Step 1: Authenticate User
+        access_token = authenticate_user()
+       # new_tokens = refresh_access_token(refresh_token)
+        #access_token ='eyJ0eXAiOiJKV1QiLCJub25jZSI6IlVnX21pUWhhNVI0dmFURUtLYXNFVTR3Z1RpU3g0ampBTmpjSXZPc2c3bTAiLCJhbGciOiJSUzI1NiIsIng1dCI6InoxcnNZSEhKOS04bWdndDRIc1p1OEJLa0JQdyIsImtpZCI6InoxcnNZSEhKOS04bWdndDRIc1p1OEJLa0JQdyJ9.eyJhdWQiOiJodHRwczovL2dyYXBoLm1pY3Jvc29mdC5jb20iLCJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC9mNmI5MWI3OC02YTBjLTRlY2MtYjY1Yi1iZWM2NzBjYTIwNzYvIiwiaWF0IjoxNzM0OTU3NjQ0LCJuYmYiOjE3MzQ5NTc2NDQsImV4cCI6MTczNDk2MzI0NywiYWNjdCI6MCwiYWNyIjoiMSIsImFpbyI6IkFUUUF5LzhZQUFBQXZkVGs4ZU9VVVBpZjhxSzc1WWxBZHFRQVI3NWhXS21JSXo0ZXRTUWlCNlN5WXZQeUI3MU9rMTlJaHJhNHBEeWsiLCJhbXIiOlsicHdkIl0sImFwcF9kaXNwbGF5bmFtZSI6InhpUS1EZW1vIiwiYXBwaWQiOiI5MmQyNzg5NS00MjU4LTQxMDctOTg4ZS1iYzRjMTQ1Mjg3YjAiLCJhcHBpZGFjciI6IjAiLCJmYW1pbHlfbmFtZSI6IkFsaSIsImdpdmVuX25hbWUiOiJTYXFpYiIsImlkdHlwIjoidXNlciIsImlwYWRkciI6IjE4Mi4xOTEuNzYuMTE5IiwibmFtZSI6IlNhcWliIEFsaSIsIm9pZCI6ImVhZTYyMjYwLWIwZTMtNGJiMC04ZDI1LWFhMmIwMDRmM2NkOSIsInBsYXRmIjoiMyIsInB1aWQiOiIxMDAzN0ZGRUE1RkIxRjRBIiwicmgiOiIxLkFTNEFlQnU1OWd4cXpFNjJXNzdHY01vZ2RnTUFBQUFBQUFBQXdBQUFBQUFBQUFBdUFNWXVBQS4iLCJzY3AiOiJlbWFpbCBvcGVuaWQgcHJvZmlsZSBVc2VyLlJlYWQiLCJzaWduaW5fc3RhdGUiOlsia21zaSJdLCJzdWIiOiJSRDdpdGpmN0F0SmJsMV85aUNzLTNEQzJhU2M4M00zakNDblFqX25yaHZvIiwidGVuYW50X3JlZ2lvbl9zY29wZSI6Ik5BIiwidGlkIjoiZjZiOTFiNzgtNmEwYy00ZWNjLWI2NWItYmVjNjcwY2EyMDc2IiwidW5pcXVlX25hbWUiOiJzYWxpMDZAeGlxaW5jLmNvbSIsInVwbiI6InNhbGkwNkB4aXFpbmMuY29tIiwidXRpIjoiejdrb3ZvZDBXa0M3Ym5jSWlLWTZBUSIsInZlciI6IjEuMCIsIndpZHMiOlsiYjc5ZmJmNGQtM2VmOS00Njg5LTgxNDMtNzZiMTk0ZTg1NTA5Il0sInhtc19pZHJlbCI6IjEgMTgiLCJ4bXNfc3QiOnsic3ViIjoibkg2bkdKQVBnNS1FYXd3MkJJOHBuLTYxSV83ZlFqYUxBZmt4dU10Yy1vUSJ9LCJ4bXNfdGNkdCI6MTUxMDA4NjAyMH0.CW9__bI1CES_ZQYmkj9bwFH0-NDU1rQEhiJrnjyBDaKJ9ILbxZC5mmPalGwm8fGYRxrg992AXTDmLI2i0uIuwlNm5cgmEB37Uayslr48VsxJmbccVVH2e1udKS_0ryb7bu_5K8sywQANJtx9f-wUP-wnmD1IDeWsYFtfN70WhnFIguSP_SI6Wf1m4psIIUlGaZdEsQeFyNyt_4vBw5i_muonJZPj7oYOhHyOC3IRa2QLPsoXcrC5JmPZ4qZN_Phdtj6h4GSu15_O7LcsZLbNTIox6_SS1TGYcoT5UfdN-Oeda57mD_tTXGEdYwM0aD4dYFDuL6ORV1hAJt7FEj6MJw'
+        sites = fetch_user_files(access_token)
+        for idx, site in enumerate(sites):
+            print(f"{idx + 1}: {site['name']} ({site['id']})")
+        site_idx = int(input("Select a site by number: ")) - 1
+        selected_site = sites[site_idx]
+
+        # Step 3: Fetch Document Libraries
+        print("Fetching document libraries...")
+        libraries = fetch_libraries(access_token, selected_site["id"])
+        for idx, library in enumerate(libraries):
+            print(f"{idx + 1}: {library['name']} ({library['id']})")
+        library_idx = int(input("Select a library by number: ")) - 1
+        selected_library = libraries[library_idx]
+
+        # Step 4: Fetch Folder Contents
+        print("Fetching folder contents...")
+        contents = fetch_folder_contents(access_token, selected_library["id"], "root")
+        for idx, item in enumerate(contents):
+            print(f"{idx + 1}: {item['name']} ({item['id']}) - {item['folder']['childCount']} items" if "folder" in item else f"{idx + 1}: {item['name']} (File)")
+
+        # Step 5: Download Files (Optional Step)
+        for item in contents:
+            if "file" in item:
+                download_file(access_token, item["@microsoft.graph.downloadUrl"], f"./{item['name']}")
+
+    except Exception as e:
+        print(f"Error: {e}")
+def decode_jwt(token):
+    """
+    Decode the JWT token with proper padding.
+    """
+    try:
+        # Add padding to the token if necessary
+        token = add_padding(token)
+        # Decode the token without verifying the signature
+        decoded_token = jwt.decode(token, options={"verify_signature": False})
+        return decoded_token
+    except Exception as e:
+        print(f"Error decoding token: {e}")
+        return None
+def add_padding(token):
+    """
+    Add padding to the JWT token if necessary.
+    """
+    return token + '=' * (4 - len(token) % 4)
+if __name__ == "__main__":
+    main()
+ #   access_token ='1.AS4AeBu59gxqzE62W77GcMogdpV40pJYQgdBmI68TBRSh7AuAMYuAA.AgABBAIAAADW6jl31mB3T7ugrWTT8pFeAwDs_wUA9P_iAaswcWz4EW_37UUSf-Fi5nfpCX3MWJx4X0wTxSieKk8xOUXF9iMot7jf_AFdU4XjpZcfLEzTCh4qiFkmbmhoj-kAeIEPoTk1OfZOUMroUub9b0Gz_D4DpDSW5NA4gB1lizp0QeppmEYsPrcZb_m_OQue7905SJ-jrWJLjvuoktscCw4lk8oVpy03x0XAmJZ5VAt2CFotdTLCe5_UrTi2sCdXujJ8FHxNzTXOEfjn-bJP9VFDlRgOVBfGGHx03mJfGYKlLniA-4dZJpCzfdLZkzksGkOyWLO0z_3ojc5liyw9hfEOnYw1yvqtPr_aiktiDZae6Lpg9suofOFEPEe9CMSCX0vuUlC6Gh0t3Nm1ur5Na-9uBzanjznUpBy0w5jRyDIVmNCOxlEKEIVmglRbo27HQT5qFFjVRZ3kFcnhdWPU0C2UypyszOVvreUG8aYoU3Zou7zZvOks95l6Dm1qU6IYcuQcsIRQ3VGCvddCepurBx4ahpkURMi14OK20ldhSUvwzu0u36KR0TN--EKO18N20l6Wey_fmEzWBhNoFxIFaF-zEkKYP_h6E3msxA1vVMeT1jPPBYjBEruMR3gNx0H2-gZ7pDzK7zDTivFTvj79oQxufaXfkfzZMNSWVr16kO_ZbWlQBc_A9lbWKtk6CUxeWELoxm2X726dABa1XGGPC3QfS_D2v9Ry3m4PSsDAQKTeQUUGGpWaQ8jyU7DZuqtsyxk'  # Step 2: Fetch Sites
+  #  decoded_token = decode_jwt(access_token)
+  #  if decoded_token:
+  #      print(decoded_token)
+   # decoded_token = jwt.decode(access_token, options={"verify_signature": False})
+    #print(decoded_token)
+      
