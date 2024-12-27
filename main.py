@@ -21,6 +21,12 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 
+from dotenv import load_dotenv
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
+PRO_API_KEY = os.getenv("PRO_API_KEY")
 
 class DISCAttribute(BaseModel):
     score: int = Field(..., ge=0, le=100, description="Score for the DISC attribute (0-100)")
@@ -66,7 +72,7 @@ def google_search(query: str):
         params = {
             "engine": "google",
             "q": query +'" site:linkedin.com/in/',
-            "api_key": "136f37d06a4581f56e44549ba18ff6d650a3155a7f73335aeae71f843919763f"
+            "api_key": SERPAPI_API_KEY
         }
         if query in cache:
             results = cache[query]
@@ -116,7 +122,7 @@ def google_search(query: str):
     
 def discGenerator(linkedin_person):
     try:
-        llm = ChatOpenAI(model="gpt-4o", temperature=0, api_key='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')
+        llm = ChatOpenAI(model="gpt-4o", temperature=0, api_key=OPENAI_API_KEY)
         structured_llm = llm.with_structured_output(DISCOutput)
         
         # Generate question
@@ -151,7 +157,7 @@ def linkedInScrapper(linkedin_profile_url):
     iscraper_data["include_profile_image"] = True
 
     api_endpoint = 'https://api.proapis.com/iscraper/v4/profile-details'
-    api_key = 'BAYibUccYFuR7mqgzgJhkma4ZU1o2vuR'
+    api_key = PRO_API_KEY
 
     headers = {'X-API-KEY': api_key}
 
