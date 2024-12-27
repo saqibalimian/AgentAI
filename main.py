@@ -700,4 +700,22 @@ def parse_iscraper_linkedin_profile(data):
     return result
 
 
-print (discGenerator("SAqib ali Director of engneering xiq "))
+# Streamlit app
+st.title("DISC Analysis ")
+
+linkedin_profile_url = st.text_input("Search Person")
+
+if st.button("Search Person"):
+    try:
+        # Call the LinkedIn scraper function
+        profile_details = linkedInScrapper(linkedin_profile_url)
+        
+        # Display profile details
+        st.subheader("Profile Details")
+        st.json(profile_details)
+        
+        # Display DISC analysis
+        st.subheader("DISC Analysis")
+        st.json(profile_details["disc_analysis"])
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
