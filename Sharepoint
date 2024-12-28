@@ -4,8 +4,13 @@ import pkce
 import base64
 import hashlib
 import jwt
-
+from dotenv import load_dotenv
+import os
+load_dotenv()
 # Configuration
+CLIENT_ID =os.getenv("CLIENT_ID")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+TENANT_ID = os.getenv("TENANT_ID")
 
 REDIRECT_URI = "https://localhost:9090/azure"
 SCOPES = ["https://graph.microsoft.com/.default", "Files.Read"]
