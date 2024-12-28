@@ -162,6 +162,8 @@ def linkedInScrapper(linkedin_profile_url):
 
     url = api_endpoint
     response = requests.post(url, headers=headers, json=iscraper_data)
+    result ="" 
+    
     if response.status_code == 200:
         linkedin_profile_json = response.json()
         result = extract_profile_details(linkedin_profile_json)
